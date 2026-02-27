@@ -1,13 +1,9 @@
 // src/context/AuthContext.js
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
 
-// Demo credentials
-const ADMIN_EMAIL = 'admin@axesms.services';
-const ADMIN_PASS = 'admin@123';
-const USER_EMAIL = 'demo@axesms.services';
-const USER_PASS = 'demo@123';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
@@ -19,36 +15,81 @@ export function AuthProvider({ children }) {
     }
   });
 
-  const login = (email, password) => {
-    if (email === ADMIN_EMAIL && password === ADMIN_PASS) {
-      const u = { email, name: 'Admin', role: 'admin', balance: 99999 };
-      setUser(u);
-      localStorage.setItem('axesms_user', JSON.stringify(u));
-      return { success: true, role: 'admin' };
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const login = async (email, password) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Login failed');
+        return { success: false, error: data.error };
+      }
+
+      const userData = data.user;
+      setUser(userData);
+      localStorage.setItem('axesms_user', JSON.stringify(userData));
+      localStorage.setItem('axesms_token', data.token);
+
+      return { success: true, role: userData.role };
+    } catch (err) {
+      const errMsg = 'Network error. Make sure backend is running.';
+      setError(errMsg);
+      return { success: false, error: errMsg };
+    } finally {
+      setLoading(false);
     }
-    if (email === USER_EMAIL && password === USER_PASS) {
-      const u = { email, name: 'Rahul Sharma', role: 'user', balance: 2450 };
-      setUser(u);
-      localStorage.setItem('axesms_user', JSON.stringify(u));
-      return { success: true, role: 'user' };
-    }
-    return { success: false, error: 'Invalid email or password' };
   };
 
-  const signup = (name, email, phone, password) => {
-    const u = { email, name, phone, role: 'user', balance: 50 };
-    setUser(u);
-    localStorage.setItem('axesms_user', JSON.stringify(u));
-    return { success: true, role: 'user' };
+  const signup = async (name, email, phone, password, confirmPassword) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, phone, password, confirmPassword }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Signup failed');
+        return { success: false, error: data.error };
+      }
+
+      const userData = data.user;
+      setUser(userData);
+      localStorage.setItem('axesms_user', JSON.stringify(userData));
+      localStorage.setItem('axesms_token', data.token);
+
+      return { success: true, role: userData.role };
+    } catch (err) {
+      const errMsg = 'Network error. Make sure backend is running.';
+      setError(errMsg);
+      return { success: false, error: errMsg };
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('axesms_user');
+    localStorage.removeItem('axesms_token');
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, isAdmin: user?.role === 'admin', isLoggedIn: !!user }}>
+    <AuthContext.Provider value={{ user, login, signup, logout, isAdmin: user?.role === 'admin', isLoggedIn: !!user, loading, error }}>
       {children}
     </AuthContext.Provider>
   );
